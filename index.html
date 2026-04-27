@@ -150,7 +150,62 @@
             z-index: 5;
             filter: drop-shadow(0 10px 5px rgba(0,0,0,0.8));
             pointer-events: none;
+            transition: filter 0.3s;
         }
+
+        /* 貓咪釣到寶物的狂歡動畫 - 蹦起來並發光定格 */
+        .celebrate {
+            animation: cat-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        
+        @keyframes cat-pop {
+            0% { transform: translateY(0) scale(1); filter: drop-shadow(0 10px 5px rgba(0,0,0,0.8)); }
+            50% { transform: translateY(-50px) scale(1.1); filter: drop-shadow(0 30px 15px rgba(0,0,0,0.4)) drop-shadow(0 0 20px var(--primary)); }
+            100% { transform: translateY(-20px) scale(1.05); filter: drop-shadow(0 20px 10px rgba(0,0,0,0.6)) drop-shadow(0 0 40px #fde047); }
+        }
+
+        /* 慶祝飛碟與閃爍光芒 */
+        .celebration-ufo {
+            position: absolute;
+            top: 20%;     /* 移到高高的天空中 */
+            left: 50%;    /* 水平置中基準 */
+            margin-left: -50px; 
+            font-size: 100px; /* 尺寸放大 */
+            z-index: 6; 
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .celebration-ufo.fly-by {
+            animation: 
+                ufo-arrive 2.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
+                ufo-flash 0.3s infinite alternate;
+        }
+
+        @keyframes ufo-arrive {
+            /* 從左上空飛入 -> 停留在貓咪正上方的高空 -> 向右上空飛走 */
+            0% { transform: translate(-300px, -50px) scale(0.5) rotate(-15deg); opacity: 0; }
+            20% { transform: translate(-30px, 0px) scale(1.5) rotate(10deg); opacity: 1; }
+            80% { transform: translate(30px, -20px) scale(1.5) rotate(-5deg); opacity: 1; }
+            100% { transform: translate(400px, -150px) scale(0.5) rotate(30deg); opacity: 0; }
+        }
+
+        @keyframes ufo-flash {
+            0% { filter: drop-shadow(0 0 10px #fde047) drop-shadow(0 0 20px #f43f5e) brightness(1); }
+            100% { filter: drop-shadow(0 0 30px #38bdf8) drop-shadow(0 0 50px #a855f7) brightness(1.5); }
+        }
+
+        #rod-line {
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-origin: 60px 50px;
+        }
+
+        .fisher-cat.celebrate #rod-line {
+            transform: rotate(-50deg);
+        }
+
+        .fisher-cat.celebrate #cat-eyes-normal { display: none; }
+        .fisher-cat.celebrate #cat-eyes-happy { display: block !important; }
 
         /* 釣魚線 */
         #fishing-line {
@@ -438,14 +493,29 @@
         <svg id="fishing-line"></svg>
         <div class="flash" id="flash"></div>
 
+        <!-- 慶祝飛碟 -->
+        <div class="celebration-ufo" id="celebration-ufo">🛸</div>
+
         <!-- 貓咪釣客 SVG -->
         <svg class="fisher-cat" viewBox="0 0 100 100">
             <path d="M 20 90 C 20 60, 40 40, 60 40 C 70 40, 80 50, 85 70 L 90 90 Z" fill="#0f172a" />
             <circle cx="50" cy="35" r="18" fill="#0f172a" />
             <polygon points="35,25 30,5 45,20" fill="#0f172a" />
             <polygon points="65,25 70,5 55,20" fill="#0f172a" />
-            <ellipse cx="45" cy="32" rx="3" ry="5" fill="#fde047" />
-            <ellipse cx="60" cy="32" rx="3" ry="5" fill="#fde047" />
+            
+            <!-- 正常眼睛 -->
+            <g id="cat-eyes-normal">
+                <ellipse cx="45" cy="32" rx="3" ry="5" fill="#fde047" />
+                <ellipse cx="60" cy="32" rx="3" ry="5" fill="#fde047" />
+            </g>
+            <!-- 釣到時的開心愛心眼 (解決原本看起來像背面後腦勺的問題) -->
+            <g id="cat-eyes-happy" style="display: none;">
+                <!-- 左眼愛心 -->
+                <path d="M 0 3 A 3 3 0 0 1 6 3 A 3 3 0 0 1 12 3 Q 12 6 6 10 Q 0 6 0 3 Z" fill="#f43f5e" transform="translate(39, 27) scale(0.9)" />
+                <!-- 右眼愛心 -->
+                <path d="M 0 3 A 3 3 0 0 1 6 3 A 3 3 0 0 1 12 3 Q 12 6 6 10 Q 0 6 0 3 Z" fill="#f43f5e" transform="translate(54, 27) scale(0.9)" />
+            </g>
+
             <line id="rod-line" x1="60" y1="50" x2="120" y2="-10" stroke="#78350f" stroke-width="4" stroke-linecap="round"/>
         </svg>
 
@@ -492,6 +562,9 @@
         let fakeBiteTimer = null;
         let realBiteTimer = null;
         let escapeTimer = null;
+
+        // 紀錄原始名單供重置使用
+        let originalHeroesText = "";
 
         // 浮標位置控制 (平滑補間)
         let targetBobberX = 60; // %
@@ -561,17 +634,29 @@
                 });
             }
             
-            // 水面奇葩漂流物
+            // 水面奇葩漂流物與發光生物
             debrisList = [];
-            // 增加 UFO 的比例
-            const debrisEmojis = ["🐟", "🌿", "🦆", "🥾", "🦴", "📜", "🪵", "🐙", "🛸", "🛸", "🛸", "🛸"];
-            for(let i=0; i<10; i++) {
+            const floatingItems = [
+                { emoji: "🪼", glow: "#06b6d4", speedMult: 0.5 }, // 發光水母(螢光藍)
+                { emoji: "🪼", glow: "#a855f7", speedMult: 0.6 }, // 發光水母(夢幻紫)
+                { emoji: "🐠", glow: "#fbbf24", speedMult: 1.2 }, // 熱帶魚
+                { emoji: "🐟", glow: "#38bdf8", speedMult: 1.5 }, // 藍色小魚
+                { emoji: "🦆", glow: "", speedMult: 0.8 },        // 迷路的鴨子
+                { emoji: "🦑", glow: "#f43f5e", speedMult: 0.4 }, // 發光烏賊(霓虹紅)
+                { emoji: "🥾", glow: "", speedMult: 0.3 },        // 魔王的破鞋
+                { emoji: "📜", glow: "#fef08a", speedMult: 0.2 }, // 發光瓶中信
+                { emoji: "🫧", glow: "#ffffff", speedMult: 0.5 }  // 漂浮泡泡
+            ];
+            for(let i=0; i<15; i++) {
+                const item = floatingItems[Math.floor(Math.random() * floatingItems.length)];
                 debrisList.push({
                     x: Math.random() * bgCanvas.width,
                     y: bgCanvas.height * 0.45 + Math.random() * (bgCanvas.height * 0.5),
-                    speed: (Math.random() - 0.5) * 0.8,
-                    emoji: debrisEmojis[Math.floor(Math.random() * debrisEmojis.length)],
-                    waveOffset: Math.random() * Math.PI * 2
+                    speed: (Math.random() > 0.5 ? 1 : -1) * (0.3 + Math.random() * 0.6) * item.speedMult,
+                    emoji: item.emoji,
+                    glow: item.glow,
+                    waveOffset: Math.random() * Math.PI * 2,
+                    scale: 0.8 + Math.random() * 0.7 // 隨機大小
                 });
             }
 
@@ -632,17 +717,28 @@
                 ctx.fillRect(bgCanvas.width * 0.6 - width/2, y, width, 2);
             }
 
-            // 畫漂流碎片
-            ctx.font = "20px Arial";
+            // 畫漂流碎片與發光水母
             debrisList.forEach(d => {
                 d.x += d.speed;
-                if(d.x < -30) d.x = bgCanvas.width + 30;
-                if(d.x > bgCanvas.width + 30) d.x = -30;
-                const y = d.y + Math.sin(time * 2 + d.waveOffset) * 5;
-                ctx.globalAlpha = 0.4; // 在水裡微透
+                if(d.x < -50) d.x = bgCanvas.width + 50;
+                if(d.x > bgCanvas.width + 50) d.x = -50;
+                const y = d.y + Math.sin(time * 2 + d.waveOffset) * 6; // 隨波逐流
+                
+                ctx.globalAlpha = 0.75; // 在水裡微透
+                ctx.font = `${Math.floor(25 * d.scale)}px Arial`;
+                
+                // 加入專屬的發光特效
+                if (d.glow) {
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = d.glow;
+                } else {
+                    ctx.shadowBlur = 0;
+                }
+                
                 ctx.fillText(d.emoji, d.x, y);
             });
             ctx.globalAlpha = 1.0;
+            ctx.shadowBlur = 0; // 畫完後重置陰影，避免影響其他特效
 
             // 畫動態星星特效 (釣魚時的小星星 & 爆炸星星)
             for(let i=particles.length-1; i>=0; i--) {
@@ -713,10 +809,18 @@
             initCanvas();
             drawCanvas();
             updateFishingLine();
+            
+            // 紀錄原始名單，並在每次手動輸入時更新原始名單
+            originalHeroesText = heroListArea.value;
+            heroListArea.addEventListener('input', () => {
+                originalHeroesText = heroListArea.value;
+            });
+
             parseHeroList();
 
             // 綁定按鈕
             updateBtn.addEventListener('click', () => {
+                heroListArea.value = originalHeroesText; // 放回被打撈的成員
                 parseHeroList();
                 drawnHeroes = [];
                 updateDrawnUI();
@@ -798,6 +902,11 @@
             statusText.style.color = "var(--primary)";
             setActionBtn("拋竿", "");
             
+            // 恢復貓咪動畫與釣線
+            document.querySelector('.fisher-cat').classList.remove('celebrate');
+            document.getElementById('celebration-ufo').classList.remove('fly-by');
+            fishingLineSvg.style.display = 'block';
+
             // 隨機換一個水面目標位置
             targetBobberX = 40 + Math.random() * 40;
             targetBobberY = 50 + Math.random() * 30;
@@ -899,6 +1008,11 @@
             btnAction.disabled = true; 
             
             statusText.textContent = "大豐收！";
+
+            // 隱藏釣線、觸發貓咪慶祝動畫與飛碟
+            fishingLineSvg.style.display = 'none';
+            document.querySelector('.fisher-cat').classList.add('celebrate');
+            document.getElementById('celebration-ufo').classList.add('fly-by');
 
             // 畫面閃白
             flash.classList.add('active');
